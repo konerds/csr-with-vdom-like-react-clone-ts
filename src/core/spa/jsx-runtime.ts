@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { CONST_TYPE_FRAGMENT } from './constants';
 import { createElement, type I_VNODE } from './vdom';
 
@@ -37,14 +36,7 @@ function jsx(type: any, props: any, key?: string) {
 
 const jsxs = jsx;
 
-function jsxDEV(
-  type: any,
-  props: any,
-  key?: string,
-  _isStatic?: boolean,
-  _source?: any,
-  _self?: any
-) {
+function jsxDEV(type: any, props: any, key?: string) {
   return jsx(type, props, key) as I_VNODE;
 }
 

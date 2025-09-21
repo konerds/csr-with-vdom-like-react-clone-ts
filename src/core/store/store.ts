@@ -1,11 +1,11 @@
 import { CONST_ACTION_INIT } from './constants';
-import {
-  type I_ACTION,
-  type I_STORE,
-  type T_ACTION,
-  type T_LISTENER,
-  type T_REDUCER,
-  type T_STATE,
+import type {
+  I_ACTION,
+  I_STORE,
+  T_ACTION,
+  T_LISTENER,
+  T_REDUCER,
+  T_STATE,
 } from './interfaces';
 
 function createStore<S, A extends I_ACTION>(

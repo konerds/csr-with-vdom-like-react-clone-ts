@@ -1,10 +1,10 @@
 import { CONST_MODES_ROUTER } from './constants';
-import {
-  type I_ROUTER,
-  type I_ROUTES,
-  type T_MODES_ROUTER,
-  type T_ON_ROUTE,
-  type T_PARAMS_ON_ROUTE,
+import type {
+  I_ROUTER,
+  I_ROUTES,
+  T_MODES_ROUTER,
+  T_ON_ROUTE,
+  T_PARAMS_ON_ROUTE,
 } from './interfaces';
 
 class Router<H> {

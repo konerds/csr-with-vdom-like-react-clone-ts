@@ -1,18 +1,16 @@
+import type { I_TODO } from '@api';
 import { Component, createElement as el } from '@core';
 
-interface I_PROPS_TODO {
-  todo: {
-    id: string;
-    text: string;
-  };
-}
+type T_PROPS = {
+  todo: I_TODO;
+};
 
-interface I_STATE_TODO {
-  todo: I_PROPS_TODO['todo'];
-}
+type T_STATE = {
+  todo: I_TODO;
+};
 
-class Todo extends Component<I_PROPS_TODO, I_STATE_TODO> {
-  constructor(props: I_PROPS_TODO) {
+class Todo extends Component<T_PROPS, T_STATE> {
+  constructor(props: T_PROPS) {
     super(props);
 
     const { todo } = props;

@@ -2,21 +2,21 @@ import { fetchTodos } from '@api';
 import { Todos } from '@components';
 import { Component, createElement as el } from '@core';
 
-interface I_PROPS_PAGE_TODOS {
+type T_PROPS = {
   route: string;
-}
+};
 
-interface I_STATE_PAGE_TODOS {
+type T_STATE = {
   isError: boolean;
   isLoading: boolean;
   todos: {
     id: string;
     text: string;
   }[];
-}
+};
 
-class PageTodos extends Component<I_PROPS_PAGE_TODOS, I_STATE_PAGE_TODOS> {
-  constructor(props: I_PROPS_PAGE_TODOS) {
+class PageTodos extends Component<T_PROPS, T_STATE> {
+  constructor(props: T_PROPS) {
     super(props);
 
     this.state = { isError: false, isLoading: true, todos: [] };

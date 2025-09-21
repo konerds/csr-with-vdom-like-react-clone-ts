@@ -1,3 +1,2 @@
-import { fetchTodo, fetchTodos } from './todos';
-
-export { fetchTodo, fetchTodos };
+export * from './interfaces';
+export * from './todos';

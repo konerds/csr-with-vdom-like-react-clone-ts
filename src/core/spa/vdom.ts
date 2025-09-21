@@ -1,4 +1,3 @@
-import { type T_CREATE_ELEMENT } from './component';
 import { CONST_TYPE_FRAGMENT, CONST_TYPE_TEXT } from './constants';
 
 interface I_IDLE_DEADLINE {
@@ -27,7 +26,17 @@ interface I_PROPS extends T_ANY_PROPS {
     | { current?: HTMLElement | Text | null };
 }
 
+type T_HOST_TYPE = string;
+
+type T_SPECIAL_TYPE = typeof CONST_TYPE_TEXT | typeof CONST_TYPE_FRAGMENT;
+
 type T_FUNCTION_COMPONENT<P extends I_PROPS = I_PROPS> = (_props: P) => I_VNODE;
+
+type T_CREATE_ELEMENT = <P extends I_PROPS = I_PROPS>(
+  _type: T_VNODE_TYPE,
+  _props?: P | null,
+  ..._children: Array<I_VNODE | string | number | boolean | null | undefined>
+) => I_VNODE;
 
 interface I_CLASS_COMPONENT_INSTANCE<P extends I_PROPS = I_PROPS> {
   props: P;
@@ -37,22 +46,18 @@ interface I_CLASS_COMPONENT_INSTANCE<P extends I_PROPS = I_PROPS> {
   __updater?: () => void;
 }
 
-type T_HOST_TYPE = string;
-
-type T_SPECIAL_TYPE = typeof CONST_TYPE_TEXT | typeof CONST_TYPE_FRAGMENT;
-
-type T_VNODE_TYPE =
-  | T_HOST_TYPE
-  | T_SPECIAL_TYPE
-  | T_FUNCTION_COMPONENT<any>
-  | I_CLASS_COMPONENT_CONSTRUCTOR<any>;
-
 interface I_CLASS_COMPONENT_CONSTRUCTOR<P extends I_PROPS = I_PROPS> {
   new (_props: P): I_CLASS_COMPONENT_INSTANCE<P>;
   prototype: {
     render: (_createElement: T_CREATE_ELEMENT) => I_VNODE;
   };
 }
+
+type T_VNODE_TYPE =
+  | T_HOST_TYPE
+  | T_SPECIAL_TYPE
+  | T_FUNCTION_COMPONENT<any>
+  | I_CLASS_COMPONENT_CONSTRUCTOR<any>;
 
 type T_EFFECT_TAG = 'PLACEMENT' | 'UPDATE' | 'DELETION';
 
@@ -724,6 +729,7 @@ export {
   type I_PROPS,
   type I_VNODE,
   render,
+  type T_CREATE_ELEMENT,
   useEffect,
   useLayoutEffect,
   useState,

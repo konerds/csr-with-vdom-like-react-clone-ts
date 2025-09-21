@@ -1,4 +1,9 @@
-import { createElement, render } from './vdom';
+import {
+  createElement,
+  type I_VNODE,
+  render,
+  type T_CREATE_ELEMENT,
+} from './vdom';
 
 type T_PATCH<S> = Partial<S> | ((_prev: Readonly<S>) => Partial<S>);
 
@@ -6,20 +11,7 @@ type T_UPDATER = () => void;
 
 type T_CONTAINER = Element | DocumentFragment;
 
-interface I_VNODE<P = Record<string, unknown>> {
-  type: unknown;
-  props?: P & Record<string, unknown>;
-  children?: unknown;
-}
-
 type T_RENDER = (_vnode: I_VNODE, _container: T_CONTAINER) => void;
-
-type T_CREATE_ELEMENT = (
-  _type: unknown,
-  _props?: Record<string, unknown> | null,
-  ..._children: unknown[]
-) => I_VNODE;
-
 abstract class Component<
   P extends object = Record<string, unknown>,
   S extends object = Record<string, unknown>,
@@ -90,4 +82,4 @@ abstract class Component<
   }
 }
 
-export { Component, type T_CREATE_ELEMENT };
+export { Component };

@@ -1,41 +1,26 @@
-import { CONST_MODES_ROUTER, type T_MODES_ROUTER } from '@core';
+import {
+  Component,
+  CONST_TYPE_FRAGMENT,
+  createElement as el,
+  Router,
+} from '@core';
+import { Page404 } from '@pages/not-found';
+import { PageTodos } from '@pages/todos';
+import { PageTodo } from '@pages/todos/slug';
 
-import { Router } from '../core/router/router.js';
-import { Component } from '../core/spa/component.js';
-import { CONST_TYPE_FRAGMENT, createElement as el } from '../core/spa/vdom.js';
-import { Page404 } from '../pages/not-found.js';
-import { PageTodos } from '../pages/todos/index.js';
-import { PageTodo } from '../pages/todos/slug.js';
+import { mode } from './configs.js';
+import { HANDLERS, PATHS, ROUTES } from './contstants.js';
 
-const mode = CONST_MODES_ROUTER.HASH as T_MODES_ROUTER;
-const HANDLERS = Object.freeze({
-  BASE: 'base',
-  NOT_FOUND: 'not-found',
-  TODO: 'todo',
-  TODOS: 'todos',
-});
-const PATHS = Object.freeze({
-  BASE: '/',
-  NOT_FOUND: '/404',
-  TODO: '/todos/:id',
-  TODOS: '/todos',
-});
-const ROUTES = [
-  { handler: HANDLERS.BASE, path: PATHS.BASE },
-  { handler: HANDLERS.TODO, path: PATHS.TODO },
-  { handler: HANDLERS.TODOS, path: PATHS.TODOS },
-  { handler: HANDLERS.NOT_FOUND, path: PATHS.NOT_FOUND },
-  { handler: HANDLERS.NOT_FOUND, path: '*' },
-];
+type T_PROPS = Record<string, unknown>;
 
-interface I_STATE_PROVIDER_ROUTER {
+type T_STATE = {
   params: Record<string, string>;
   pathname: string;
   query: Record<string, string>;
   route: string;
-}
+};
 
-class ProviderRouter extends Component<object, I_STATE_PROVIDER_ROUTER> {
+class ProviderRouter extends Component<T_PROPS, T_STATE> {
   router?: any;
 
   constructor() {

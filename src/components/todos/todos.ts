@@ -2,15 +2,15 @@ import { Component, createElement as el } from '@core';
 
 import { Todo } from './todo';
 
-interface I_PROPS_TODOS {
+type T_PROPS = {
   todos: {
     id: string;
     text: string;
   }[];
-}
+};
 
-class Todos extends Component<I_PROPS_TODOS> {
-  constructor(props: I_PROPS_TODOS) {
+class Todos extends Component<T_PROPS> {
+  constructor(props: T_PROPS) {
     super(props);
   }
 

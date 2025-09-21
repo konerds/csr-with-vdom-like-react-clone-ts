@@ -2,24 +2,24 @@ import { fetchTodo } from '@api';
 import { Todo } from '@components';
 import { Component, createElement as el } from '@core';
 
-interface I_PROPS_PAGE_TODO {
+type T_PROPS = {
   route: string;
   params: {
     id?: string;
   };
-}
+};
 
-interface I_STATE_PAGE_TODO {
+type T_STATE = {
   isError: boolean;
   isLoading: boolean;
   todo?: {
     id: string;
     text: string;
   };
-}
+};
 
-class PageTodo extends Component<I_PROPS_PAGE_TODO, I_STATE_PAGE_TODO> {
-  constructor(props: I_PROPS_PAGE_TODO) {
+class PageTodo extends Component<T_PROPS, T_STATE> {
+  constructor(props: T_PROPS) {
     super(props);
 
     this.state = { isError: false, isLoading: true, todo: undefined };
@@ -37,7 +37,7 @@ class PageTodo extends Component<I_PROPS_PAGE_TODO, I_STATE_PAGE_TODO> {
     this.fetch(id);
   }
 
-  componentDidUpdate(_prevProps: Readonly<I_PROPS_PAGE_TODO>): void {
+  componentDidUpdate(_prevProps: Readonly<T_PROPS>): void {
     const { id } = this.props.params;
 
     if (id === _prevProps.params.id) {
