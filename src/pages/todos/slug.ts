@@ -1,85 +1,31 @@
-import { fetchTodo } from '@api';
+import { useRouter } from '@/router/router';
+import { fetchTodo, type I_TODO } from '@api';
 import { Todo } from '@components';
-import { Component, createElement as el } from '@core';
+import { createElement as el, useLayoutEffect, useState } from '@core';
 
-type T_PROPS = {
-  route: string;
-  params: {
-    id?: string;
-  };
-};
+function PageTodo() {
+  const { params } = useRouter();
 
-type T_STATE = {
-  isError: boolean;
-  isLoading: boolean;
-  todo?: {
-    id: string;
-    text: string;
-  };
-};
+  const [isError, setIsError] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [todo, setTodo] = useState<I_TODO | undefined>(undefined);
 
-class PageTodo extends Component<T_PROPS, T_STATE> {
-  constructor(props: T_PROPS) {
-    super(props);
-
-    this.state = { isError: false, isLoading: true, todo: undefined };
-  }
-
-  componentDidMount() {
-    const { id } = this.props.params;
-
-    if (!id) {
-      this.setState({ isError: true, isLoading: false, todo: undefined });
+  useLayoutEffect(() => {
+    if (!params?.id) {
+      setIsError(true);
+      setIsLoading(false);
+      setTodo(undefined);
 
       return;
     }
 
-    this.fetch(id);
-  }
+    setIsError(false);
+    setIsLoading(true);
 
-  componentDidUpdate(_prevProps: Readonly<T_PROPS>): void {
-    const { id } = this.props.params;
-
-    if (id === _prevProps.params.id) {
-      return;
-    }
-
-    if (!id) {
-      this.setState({ isError: true, isLoading: false, todo: undefined });
-
-      return;
-    }
-
-    this.fetch(id);
-  }
-
-  render() {
-    const { route } = this.props;
-
-    if (this.state.isError) {
-      return el('section', { className: `${route}-page` }, 'Error...');
-    }
-
-    if (this.state.isLoading) {
-      return el('section', { className: `${route}-page` }, 'Loading...');
-    }
-
-    if (!this.state.todo?.id) {
-      return el('section', { className: `${route}-page` }, 'No Data...');
-    }
-
-    const { todo } = this.state;
-
-    return el(Todo, { className: `${route}-page`, todo });
-  }
-
-  private fetch(id: string) {
-    this.setState({ isError: false, isLoading: true });
-
-    fetchTodo(id)
+    fetchTodo(params.id)
       .then((res) => {
         if (!res.ok) {
-          this.setState({ isError: true });
+          setIsError(true);
 
           return;
         }
@@ -87,17 +33,34 @@ class PageTodo extends Component<T_PROPS, T_STATE> {
         return res.json();
       })
       .then((todo) => {
-        this.setState({ todo });
+        setTodo(todo);
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error(err);
-        this.setState({ isError: true });
+        setIsError(true);
       })
       .finally(() => {
-        this.setState({ isLoading: false });
+        setIsLoading(false);
       });
+  }, [params?.id]);
+
+  if (isError) {
+    return el('section', { className: 'todo-page' }, 'Error...');
   }
+
+  if (isLoading) {
+    return el('section', { className: 'todo-page' }, 'Loading...');
+  }
+
+  if (!todo?.id) {
+    return el('section', { className: 'todo-page' }, 'No Data...');
+  }
+
+  return el(Todo, {
+    className: 'todo-page',
+    todo,
+  });
 }
 
 export { PageTodo };

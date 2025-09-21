@@ -1,4 +1,4 @@
-import type { I_VNODE } from '@/core/spa/vdom';
+import type { I_VNODE } from '@core';
 
 declare global {
   namespace JSX {

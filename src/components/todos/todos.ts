@@ -1,12 +1,10 @@
+import type { I_TODO } from '@api';
 import { Component, createElement as el } from '@core';
 
 import { Todo } from './todo';
 
 type T_PROPS = {
-  todos: {
-    id: string;
-    text: string;
-  }[];
+  todos: I_TODO[];
 };
 
 class Todos extends Component<T_PROPS> {

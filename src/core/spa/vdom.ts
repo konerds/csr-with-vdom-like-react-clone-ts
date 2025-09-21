@@ -635,50 +635,66 @@ function useState<S>(initial: S): [S, T_UPDATER_STATE<S>] {
     (wipFiber?.alternate?.hooks &&
       (wipFiber.alternate.hooks[hookIndex] as I_HOOK_STATE<S> | undefined)) ||
     undefined;
-  const hook: I_HOOK_STATE<S> = {
-    queue: [],
-    state: oldHook ? oldHook.state : initial,
-  };
-  const actions = oldHook ? oldHook.queue : [];
+  const queueShared = oldHook?.queue ?? [];
+  let state = oldHook ? oldHook.state : initial;
+  const szQueueShared = queueShared.length;
 
-  for (const action of actions) {
-    hook.state = (
-      typeof action === 'function' ? (action as (_p: S) => S) : () => action
-    )(hook.state);
+  if (szQueueShared) {
+    for (let i = 0; i < szQueueShared; ++i) {
+      const action = queueShared[i] as S | ((_p: S) => S);
+      state =
+        typeof action === 'function'
+          ? (action as (_p: S) => S)(state)
+          : (action as S);
+    }
+
+    queueShared.length = 0;
   }
 
+  const hook: I_HOOK_STATE<S> = {
+    queue: queueShared,
+    state,
+  };
   wipFiber!.hooks!.push(hook);
   ++hookIndex;
 
   return [
-    hook.state,
+    state,
     ((action) => {
-      hook.queue.push(action);
+      queueShared.push(action);
 
-      if (!currentRoot) {
+      const rootBase = currentRoot ?? wipRoot;
+
+      if (!rootBase) {
         return;
       }
 
       nextUnitOfWork = wipRoot = {
-        alternate: currentRoot,
-        dom: currentRoot.dom,
-        props: currentRoot.props,
+        alternate: rootBase,
+        dom: rootBase.dom,
+        props: rootBase.props,
         type: CONST_TYPE_FRAGMENT,
       } as I_FIBER;
       deletions = [];
+
+      polyfillRequestIdleCallback(workLoop);
     }) as T_UPDATER_STATE<S>,
   ];
 }
 
 function _areDependenciesChanged(prev?: any[], next?: any[]) {
-  const szPrev = prev?.length ?? 0;
+  if (!prev) {
+    return true;
+  }
+
+  const szPrev = prev.length ?? 0;
 
   if (szPrev !== next?.length) {
     return true;
   }
 
   for (let i = 0; i < szPrev; ++i) {
-    if (!Object.is(prev![i], next![i])) {
+    if (!Object.is(prev[i], next![i])) {
       return true;
     }
   }
