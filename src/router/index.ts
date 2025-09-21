@@ -1,4 +1,4 @@
-import { CONST_MODES_ROUTER, T_MODES_ROUTER } from '@core';
+import { CONST_MODES_ROUTER, type T_MODES_ROUTER } from '@core';
 
 import { Router } from '../core/router/router.js';
 import { Component } from '../core/spa/component.js';
@@ -7,6 +7,7 @@ import { Page404 } from '../pages/not-found.js';
 import { PageTodos } from '../pages/todos/index.js';
 import { PageTodo } from '../pages/todos/slug.js';
 
+const mode = CONST_MODES_ROUTER.HASH as T_MODES_ROUTER;
 const HANDLERS = Object.freeze({
   BASE: 'base',
   NOT_FOUND: 'not-found',
@@ -27,10 +28,6 @@ const ROUTES = [
   { handler: HANDLERS.NOT_FOUND, path: '*' },
 ];
 
-interface I_PROPS_PROVIDER_ROUTER {
-  mode?: string;
-}
-
 interface I_STATE_PROVIDER_ROUTER {
   params: Record<string, string>;
   pathname: string;
@@ -38,14 +35,11 @@ interface I_STATE_PROVIDER_ROUTER {
   route: string;
 }
 
-class ProviderRouter extends Component<
-  I_PROPS_PROVIDER_ROUTER,
-  I_STATE_PROVIDER_ROUTER
-> {
+class ProviderRouter extends Component<object, I_STATE_PROVIDER_ROUTER> {
   router?: any;
 
-  constructor(props: I_PROPS_PROVIDER_ROUTER) {
-    super(props);
+  constructor() {
+    super();
 
     this.state = {
       params: {},
@@ -56,8 +50,6 @@ class ProviderRouter extends Component<
   }
 
   componentDidMount() {
-    const { mode = CONST_MODES_ROUTER.HISTORY } = this.props;
-
     const navigate = (to: string) => {
       if (window.location.pathname + window.location.search === to) {
         return;
@@ -67,7 +59,7 @@ class ProviderRouter extends Component<
     };
 
     this.router = new Router({
-      mode: mode as T_MODES_ROUTER,
+      mode,
       onRoute: (handler, params, query, pathname) => {
         if (handler === HANDLERS.NOT_FOUND && pathname !== PATHS.NOT_FOUND) {
           navigate(PATHS.NOT_FOUND);

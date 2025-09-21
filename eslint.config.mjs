@@ -7,7 +7,7 @@ import globals from 'globals';
 import eslintTS from 'typescript-eslint';
 
 const CONFIGS_COMMON = {
-  files: ['**/*.{ts,js,mjs}'],
+  files: ['**/*.{ts,tsx,js,mjs}'],
   languageOptions: {
     ecmaVersion: 'latest',
     globals: { ...globals.node, ...globals.es2021, ...globals.browser },
@@ -21,7 +21,7 @@ export default [
   },
   ...eslintTS.configs.recommended,
   {
-    files: ['**/*.ts'],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parser: eslintTS.parser,
       parserOptions: {
@@ -31,7 +31,7 @@ export default [
     },
     settings: {
       'import/resolver': {
-        node: { extensions: ['.ts', '.js', '.json'] },
+        node: { extensions: ['.ts', '.tsx', '.js', '.json'] },
         typescript: {
           project: ['./tsconfig.json'],
         },

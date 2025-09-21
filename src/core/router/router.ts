@@ -1,7 +1,7 @@
 import { CONST_MODES_ROUTER } from './constants';
 import {
-  I_ROUTER,
-  I_ROUTES,
+  type I_ROUTER,
+  type I_ROUTES,
   type T_MODES_ROUTER,
   type T_ON_ROUTE,
   type T_PARAMS_ON_ROUTE,
@@ -13,8 +13,10 @@ class Router<H> {
   #mode: T_MODES_ROUTER;
   #listenerPopState: (_e: PopStateEvent) => void;
   #listenerHashChange: (_e: HashChangeEvent) => void;
+  #listenerDocumentClick: (_e: MouseEvent) => void;
   #isResolving = false;
   #isResolvingScheduled = false;
+  #isDestroyed = false;
 
   constructor({
     mode = CONST_MODES_ROUTER.HISTORY,
@@ -24,19 +26,11 @@ class Router<H> {
     this.#routes = routes || [];
     this.#onRoute = typeof onRoute === 'function' ? onRoute : () => {};
     this.#mode = mode;
-
     this.#listenerPopState = () => this.resolve();
     this.#listenerHashChange = () => this.resolve();
-
-    if (this.#mode === CONST_MODES_ROUTER.HISTORY) {
-      window.addEventListener('popstate', this.#listenerPopState);
-    } else {
-      window.addEventListener('hashchange', this.#listenerHashChange);
-    }
-
-    document.addEventListener('click', (event) => {
+    this.#listenerDocumentClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      const elAnchor = target?.closest('a[data-link]');
+      const elAnchor = target?.closest<HTMLAnchorElement>('a[data-link]');
 
       if (!elAnchor) {
         return;
@@ -50,17 +44,28 @@ class Router<H> {
 
       event.preventDefault();
       this.navigate(href);
-    });
+    };
+
+    if (this.#mode === CONST_MODES_ROUTER.HISTORY) {
+      window.addEventListener('popstate', this.#listenerPopState);
+    } else {
+      window.addEventListener('hashchange', this.#listenerHashChange);
+    }
+
+    document.addEventListener('click', this.#listenerDocumentClick);
   }
 
   navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
+    if (this.#isDestroyed) {
+      return;
+    }
+
     let next: string;
 
     if (this.#mode === CONST_MODES_ROUTER.HASH) {
-      if (
-        (window.location.hash || '') ===
-        (next = path.startsWith('/') ? `#${path}` : `#/${path}`)
-      ) {
+      next = path.startsWith('/') ? `#${path}` : `#/${path}`;
+
+      if ((window.location.hash || '') === next) {
         return;
       }
 
@@ -84,7 +89,9 @@ class Router<H> {
       return;
     }
 
-    if (window.location.pathname + window.location.search === (next = path)) {
+    next = path;
+
+    if (window.location.pathname + window.location.search === next) {
       return;
     }
 
@@ -103,7 +110,7 @@ class Router<H> {
   }
 
   resolve() {
-    if (this.#isResolving) {
+    if (this.#isDestroyed || this.#isResolving) {
       return;
     }
 
@@ -123,11 +130,12 @@ class Router<H> {
     } finally {
       this.#isResolving = false;
 
-      if (this.#isResolvingScheduled) {
-        this.#isResolvingScheduled = false;
-
-        queueMicrotask(() => this.resolve());
+      if (!this.#isResolvingScheduled) {
+        return;
       }
+
+      this.#isResolvingScheduled = false;
+      queueMicrotask(() => this.resolve());
     }
   }
 
@@ -146,14 +154,13 @@ class Router<H> {
 
   #match(pathname: string) {
     const segments = pathname.split('/').filter(Boolean);
-    let fallback = null;
+    let fallback: { handler: H; params: T_PARAMS_ON_ROUTE } | null = null;
 
     for (const route of this.#routes) {
       const { handler, path } = route;
 
       if (path === '*') {
         fallback = { handler, params: {} };
-
         continue;
       }
 
@@ -178,7 +185,6 @@ class Router<H> {
 
         if (part !== segment) {
           isMatched = false;
-
           break;
         }
       }
@@ -192,7 +198,7 @@ class Router<H> {
   }
 
   #scheduleResolve() {
-    if (this.#mode === CONST_MODES_ROUTER.HASH) {
+    if (this.#isDestroyed || this.#mode === CONST_MODES_ROUTER.HASH) {
       return;
     }
 
@@ -203,6 +209,26 @@ class Router<H> {
     }
 
     queueMicrotask(() => this.resolve());
+  }
+
+  destroy() {
+    if (this.#isDestroyed) {
+      return;
+    }
+
+    this.#isDestroyed = true;
+
+    if (this.#mode === CONST_MODES_ROUTER.HISTORY) {
+      window.removeEventListener('popstate', this.#listenerPopState);
+    } else {
+      window.removeEventListener('hashchange', this.#listenerHashChange);
+    }
+
+    document.removeEventListener('click', this.#listenerDocumentClick);
+    this.#isResolving = false;
+    this.#isResolvingScheduled = false;
+    this.#onRoute = (() => {}) as T_ON_ROUTE<H>;
+    this.#routes = [];
   }
 }
 

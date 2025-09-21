@@ -32,6 +32,8 @@ abstract class Component<
 
   componentDidMount?(): void;
 
+  componentDidUpdate?(_prevProps: Readonly<P>, _prevState: Readonly<S>): void;
+
   constructor(props?: P) {
     this.props = (props ?? ({} as P)) as Readonly<P>;
   }
@@ -88,4 +90,4 @@ abstract class Component<
   }
 }
 
-export { Component, T_CREATE_ELEMENT };
+export { Component, type T_CREATE_ELEMENT };

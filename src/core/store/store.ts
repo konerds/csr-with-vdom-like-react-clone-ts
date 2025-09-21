@@ -1,7 +1,7 @@
 import { CONST_ACTION_INIT } from './constants';
 import {
-  I_ACTION,
-  I_STORE,
+  type I_ACTION,
+  type I_STORE,
   type T_ACTION,
   type T_LISTENER,
   type T_REDUCER,
