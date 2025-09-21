@@ -1,39 +1,31 @@
-import { fetchTodo } from '@api';
+import { useRouter } from '@/router/router';
+import { fetchTodo, type I_TODO } from '@api';
 import { Todo } from '@components';
-import { Component, createElement as el } from '@core';
+import { createElement as el, useLayoutEffect, useState } from '@core';
 
-interface I_PROPS_PAGE_TODO {
-  route: string;
-  params: {
-    id: string;
-  };
-}
+function PageTodo() {
+  const { params } = useRouter();
 
-interface I_STATE_PAGE_TODO {
-  isError: boolean;
-  isLoading: boolean;
-  todo?: {
-    id: string;
-    text: string;
-  };
-}
+  const [isError, setIsError] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [todo, setTodo] = useState<I_TODO | undefined>(undefined);
 
-class PageTodo extends Component<I_PROPS_PAGE_TODO, I_STATE_PAGE_TODO> {
-  constructor(props: I_PROPS_PAGE_TODO) {
-    super(props);
+  useLayoutEffect(() => {
+    if (!params?.id) {
+      setIsError(true);
+      setIsLoading(false);
+      setTodo(undefined);
 
-    this.state = { isError: false, isLoading: true, todo: undefined };
-  }
+      return;
+    }
 
-  componentDidMount() {
-    const { id } = this.props.params;
+    setIsError(false);
+    setIsLoading(true);
 
-    this.setState({ isError: false, isLoading: true });
-
-    fetchTodo(id)
+    fetchTodo(params.id)
       .then((res) => {
         if (!res.ok) {
-          this.setState({ isError: true });
+          setIsError(true);
 
           return;
         }
@@ -41,37 +33,34 @@ class PageTodo extends Component<I_PROPS_PAGE_TODO, I_STATE_PAGE_TODO> {
         return res.json();
       })
       .then((todo) => {
-        this.setState({ todo });
+        setTodo(todo);
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error(err);
-        this.setState({ isError: true });
+        setIsError(true);
       })
       .finally(() => {
-        this.setState({ isLoading: false });
+        setIsLoading(false);
       });
+  }, [params?.id]);
+
+  if (isError) {
+    return el('section', { className: 'todo-page' }, 'Error...');
   }
 
-  render() {
-    const { route } = this.props;
-
-    if (this.state.isError) {
-      return el('section', { className: `${route}-page` }, 'Error...');
-    }
-
-    if (this.state.isLoading) {
-      return el('section', { className: `${route}-page` }, 'Loading...');
-    }
-
-    if (!this.state.todo?.id) {
-      return el('section', { className: `${route}-page` }, 'No Data...');
-    }
-
-    const { todo } = this.state;
-
-    return el(Todo, { className: `${route}-page`, todo });
+  if (isLoading) {
+    return el('section', { className: 'todo-page' }, 'Loading...');
   }
+
+  if (!todo?.id) {
+    return el('section', { className: 'todo-page' }, 'No Data...');
+  }
+
+  return el(Todo, {
+    className: 'todo-page',
+    todo,
+  });
 }
 
 export { PageTodo };

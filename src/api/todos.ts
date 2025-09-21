@@ -1,4 +1,6 @@
-const TODOS = [
+import type { I_TODO } from './interfaces';
+
+const TODOS: I_TODO[] = [
   { id: '1', text: 'Learn Typescript' },
   { id: '2', text: 'Learn ES6' },
   { id: '3', text: 'Learn Virtual DOM' },
@@ -17,7 +19,7 @@ async function fetchTodos() {
       });
     }, 500);
   }) as Promise<{
-    json: () => Promise<{ id: string; text: string }[]>;
+    json: () => Promise<I_TODO[]>;
     ok: boolean;
   }>;
 }
@@ -33,7 +35,7 @@ async function fetchTodo(id: string) {
       });
     }, 500);
   }) as Promise<{
-    json: () => Promise<{ id: string; text: string } | undefined>;
+    json: () => Promise<I_TODO | undefined>;
     ok: boolean;
   }>;
 }

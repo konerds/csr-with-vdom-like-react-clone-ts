@@ -25,4 +25,10 @@ interface I_ROUTES<H> {
   handler: H;
 }
 
-export { I_ROUTER, I_ROUTES, T_MODES_ROUTER, T_ON_ROUTE, T_PARAMS_ON_ROUTE };
+export type {
+  I_ROUTER,
+  I_ROUTES,
+  T_MODES_ROUTER,
+  T_ON_ROUTE,
+  T_PARAMS_ON_ROUTE,
+};

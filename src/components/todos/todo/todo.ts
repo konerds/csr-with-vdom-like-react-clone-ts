@@ -1,34 +1,18 @@
+import type { I_TODO } from '@api';
 import { Component, createElement as el } from '@core';
 
-interface I_PROPS_TODO {
-  todo: {
-    id: string;
-    text: string;
-  };
-}
+type T_PROPS = {
+  todo: I_TODO;
+};
 
-interface I_STATE_TODO {
-  todo: I_PROPS_TODO['todo'];
-}
-
-class Todo extends Component<I_PROPS_TODO, I_STATE_TODO> {
-  constructor(props: I_PROPS_TODO) {
-    super(props);
-
-    const { todo } = props;
-    this.state = { todo };
-  }
-
-  componentDidMount() {
-    // eslint-disable-next-line no-console
-    console.log(this.state.todo);
-  }
-
+class Todo extends Component<T_PROPS> {
   render() {
+    const { todo } = this.props;
+
     return el(
       'div',
       { className: 'todo-item' },
-      el('span', { className: 'todo-item__text' }, this.state.todo.text)
+      el('span', { className: 'todo-item__text' }, todo.text)
     );
   }
 }

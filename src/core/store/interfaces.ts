@@ -23,7 +23,7 @@ interface I_STORE<S, A extends I_ACTION = I_ACTION> {
   subscribe(_listener: T_LISTENER): T_UNSUBSCRIBE;
 }
 
-export {
+export type {
   I_ACTION,
   I_STORE,
   T_ACTION,

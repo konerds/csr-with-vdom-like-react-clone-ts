@@ -1,4 +1,3 @@
-import { T_CREATE_ELEMENT } from './component';
 import { CONST_TYPE_FRAGMENT, CONST_TYPE_TEXT } from './constants';
 
 interface I_IDLE_DEADLINE {
@@ -14,33 +13,37 @@ type T_EVENT_LISTENER_MAP = Record<string, EventListener>;
 
 type T_ANY_PROPS = Record<string, any>;
 
+interface I_VNODE {
+  type: T_VNODE_TYPE;
+  props?: I_PROPS;
+}
+
 interface I_PROPS extends T_ANY_PROPS {
   children?: I_VNODE[];
   nodeValue?: string;
-}
-
-type T_FUNCTION_COMPONENT<P extends I_PROPS = I_PROPS> = (_props: P) => I_VNODE;
-
-interface I_CLASS_COMPONENT_INSTANCE<P extends I_PROPS = I_PROPS> {
-  props: P;
-  render(_createElement: T_CREATE_ELEMENT): I_VNODE;
-  componentDidMount?(): void;
-  __updater?: () => void;
+  ref?:
+    | ((_el: HTMLElement | Text | null) => void)
+    | { current?: HTMLElement | Text | null };
 }
 
 type T_HOST_TYPE = string;
 
 type T_SPECIAL_TYPE = typeof CONST_TYPE_TEXT | typeof CONST_TYPE_FRAGMENT;
 
-type T_VNODE_TYPE =
-  | T_HOST_TYPE
-  | T_SPECIAL_TYPE
-  | T_FUNCTION_COMPONENT<any>
-  | I_CLASS_COMPONENT_CONSTRUCTOR<any>;
+type T_FUNCTION_COMPONENT<P extends I_PROPS = I_PROPS> = (_props: P) => I_VNODE;
 
-interface I_VNODE {
-  type: T_VNODE_TYPE;
-  props?: I_PROPS;
+type T_CREATE_ELEMENT = <P extends I_PROPS = I_PROPS>(
+  _type: T_VNODE_TYPE,
+  _props?: P | null,
+  ..._children: Array<I_VNODE | string | number | boolean | null | undefined>
+) => I_VNODE;
+
+interface I_CLASS_COMPONENT_INSTANCE<P extends I_PROPS = I_PROPS> {
+  props: P;
+  render(_createElement: T_CREATE_ELEMENT): I_VNODE;
+  componentDidMount?(): void;
+  componentDidUpdate?(_prevProps: Readonly<P>, _prevState: Readonly<any>): void;
+  __updater?: () => void;
 }
 
 interface I_CLASS_COMPONENT_CONSTRUCTOR<P extends I_PROPS = I_PROPS> {
@@ -49,6 +52,12 @@ interface I_CLASS_COMPONENT_CONSTRUCTOR<P extends I_PROPS = I_PROPS> {
     render: (_createElement: T_CREATE_ELEMENT) => I_VNODE;
   };
 }
+
+type T_VNODE_TYPE =
+  | T_HOST_TYPE
+  | T_SPECIAL_TYPE
+  | T_FUNCTION_COMPONENT<any>
+  | I_CLASS_COMPONENT_CONSTRUCTOR<any>;
 
 type T_EFFECT_TAG = 'PLACEMENT' | 'UPDATE' | 'DELETION';
 
@@ -104,10 +113,19 @@ const polyfillRequestIdleCallback: T_REQUEST_IDLE_CALLBACK =
 function isTypeClassComponent(
   t: unknown
 ): t is I_CLASS_COMPONENT_CONSTRUCTOR<any> {
-  return typeof t === 'function' && typeof t.prototype?.render === 'function';
+  return (
+    typeof t === 'function' &&
+    typeof (t as any)?.prototype?.render === 'function'
+  );
 }
 
-function setProp(dom: I_HTML_WITH_LISTENERS, name: string, value: any) {
+function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
+  if (dom.nodeType === Node.TEXT_NODE) {
+    return;
+  }
+
+  dom = dom as I_HTML_WITH_LISTENERS;
+
   if (name === 'className') {
     if (value == null || value === false) {
       dom.removeAttribute('class');
@@ -139,13 +157,17 @@ function setProp(dom: I_HTML_WITH_LISTENERS, name: string, value: any) {
 
   if (name === 'style' && typeof value === 'object') {
     dom.removeAttribute('style');
-    Object.assign(dom.style, value || {});
+    Object.assign((dom as HTMLElement).style, value || {});
 
     return;
   }
 
-  if (name === 'ref' && typeof value === 'function') {
-    value(dom || null);
+  if (name === 'ref') {
+    if (typeof value === 'function') {
+      value(dom || null);
+    } else if (value && typeof value === 'object') {
+      (value as any).current = dom || null;
+    }
 
     return;
   }
@@ -156,7 +178,7 @@ function setProp(dom: I_HTML_WITH_LISTENERS, name: string, value: any) {
     return;
   }
 
-  dom.setAttribute(name, value === true ? '' : value);
+  dom.setAttribute(name, value === true ? '' : String(value));
 }
 
 function updateDom(
@@ -175,19 +197,24 @@ function updateDom(
     return;
   }
 
+  const listBypass = new Set(['children', 'nodeValue', 'key']);
   const keys = new Set<string>([
     ...Object.keys(propsPrev || {}),
     ...Object.keys(propsNext || {}),
   ]);
 
   for (const k of keys) {
-    const valuePropsNext = propsNext ? propsNext[k] : undefined;
-
-    if ((propsPrev ? propsPrev[k] : undefined) === valuePropsNext) {
+    if (listBypass.has(k)) {
       continue;
     }
 
-    setProp(dom as I_HTML_WITH_LISTENERS, k, valuePropsNext);
+    const valueNext = propsNext ? (propsNext as any)[k] : undefined;
+
+    if ((propsPrev ? (propsPrev as any)[k] : undefined) === valueNext) {
+      continue;
+    }
+
+    setProp(dom as I_HTML_WITH_LISTENERS, k, valueNext);
   }
 }
 
@@ -203,17 +230,18 @@ function createElement(
     | undefined
     | I_VNODE[]
   )[]
-): I_VNODE {
+) {
   return {
     props: {
       ...(props || {}),
       children: children
         .flat()
-        .filter((c) => c !== null && c !== undefined && c !== false)
+        .filter(
+          (c) => c !== null && c !== undefined && c !== false && c !== true
+        )
         .map((c) =>
           typeof c === 'string' || typeof c === 'number'
             ? ({
-                children: [],
                 props: { nodeValue: String(c) } as I_PROPS,
                 type: CONST_TYPE_TEXT,
               } as I_VNODE)
@@ -221,7 +249,7 @@ function createElement(
         ),
     },
     type,
-  };
+  } as I_VNODE;
 }
 
 let nextUnitOfWork: I_FIBER | null = null;
@@ -317,7 +345,10 @@ function commitRoot() {
     commitWork(deletion);
   }
 
-  commitWork(wipRoot!.child);
+  if (wipRoot) {
+    commitWork(wipRoot.child);
+  }
+
   currentRoot = wipRoot;
   flushLayoutEffects();
   schedulePassiveEffectsFlush();
@@ -458,9 +489,9 @@ function performUnitOfWork(fiber: I_FIBER) {
 
 let wipFiber: I_FIBER | null = null;
 
-function reconcileChildren(wipFiber: I_FIBER, elements?: I_VNODE[]) {
+function reconcileChildren(wip: I_FIBER, elements?: I_VNODE[]) {
   let index = 0;
-  let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
+  let oldFiber = wip.alternate && wip.alternate.child;
   let prevSibling: I_FIBER | null = null;
 
   while (index < (elements ? elements.length : 0) || oldFiber != null) {
@@ -473,7 +504,7 @@ function reconcileChildren(wipFiber: I_FIBER, elements?: I_VNODE[]) {
         alternate: oldFiber,
         dom: oldFiber.dom,
         effectTag: 'UPDATE',
-        parent: wipFiber,
+        parent: wip,
         props: element.props,
         stateNode: oldFiber.stateNode,
         type: oldFiber.type,
@@ -485,7 +516,7 @@ function reconcileChildren(wipFiber: I_FIBER, elements?: I_VNODE[]) {
         alternate: null,
         dom: null,
         effectTag: 'PLACEMENT',
-        parent: wipFiber,
+        parent: wip,
         props: element.props,
         type: element.type,
       } as I_FIBER;
@@ -501,7 +532,7 @@ function reconcileChildren(wipFiber: I_FIBER, elements?: I_VNODE[]) {
     }
 
     if (index === 0) {
-      wipFiber.child = newFiber;
+      wip.child = newFiber;
     } else if (prevSibling) {
       prevSibling.sibling = newFiber;
     }
@@ -535,19 +566,40 @@ function updateCompositeComponent(fiber: I_FIBER) {
           alternate: currentRoot,
           dom: currentRoot.dom,
           props: currentRoot.props,
+          type: CONST_TYPE_FRAGMENT,
         } as I_FIBER;
         deletions = [];
       };
-    } else {
-      instance.props = {
-        ...(fiber.props || {}),
-        children: fiber.props?.children || [],
-      };
+
+      reconcileChildren(fiber, [
+        instance.render(createElement as T_CREATE_ELEMENT),
+      ]);
+
+      return;
     }
 
+    const prevProps = instance.props as Readonly<any>;
+    const prevState = (instance as any).state as Readonly<any>;
+    instance.props = {
+      ...(fiber.props || {}),
+      children: fiber.props?.children || [],
+    };
     reconcileChildren(fiber, [
       instance.render(createElement as T_CREATE_ELEMENT),
     ]);
+    const callDidUpdate = () => {
+      try {
+        instance!.componentDidUpdate?.(prevProps, prevState);
+      } catch {
+        // ignore
+      }
+    };
+
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(callDidUpdate);
+    } else {
+      Promise.resolve().then(callDidUpdate);
+    }
 
     return;
   }
@@ -576,54 +628,73 @@ function updateHostComponent(fiber: I_FIBER) {
   );
 }
 
-function useState<S>(initial: S) {
+type T_UPDATER_STATE<S> = (_action: S | ((_p: S) => S)) => void;
+
+function useState<S>(initial: S): [S, T_UPDATER_STATE<S>] {
   const oldHook =
     (wipFiber?.alternate?.hooks &&
       (wipFiber.alternate.hooks[hookIndex] as I_HOOK_STATE<S> | undefined)) ||
     undefined;
-  const hook: I_HOOK_STATE<S> = {
-    queue: [],
-    state: oldHook ? oldHook.state : initial,
-  };
-  const actions = oldHook ? oldHook.queue : [];
+  const queueShared = oldHook?.queue ?? [];
+  let state = oldHook ? oldHook.state : initial;
+  const szQueueShared = queueShared.length;
 
-  for (const action of actions) {
-    hook.state = (
-      typeof action === 'function' ? (action as (_p: S) => S) : () => action
-    )(hook.state);
+  if (szQueueShared) {
+    for (let i = 0; i < szQueueShared; ++i) {
+      const action = queueShared[i] as S | ((_p: S) => S);
+      state =
+        typeof action === 'function'
+          ? (action as (_p: S) => S)(state)
+          : (action as S);
+    }
+
+    queueShared.length = 0;
   }
 
+  const hook: I_HOOK_STATE<S> = {
+    queue: queueShared,
+    state,
+  };
   wipFiber!.hooks!.push(hook);
   ++hookIndex;
 
   return [
-    hook.state,
-    (action: S | ((_p: S) => S)) => {
-      hook.queue.push(action);
+    state,
+    ((action) => {
+      queueShared.push(action);
 
-      if (!currentRoot) {
+      const rootBase = currentRoot ?? wipRoot;
+
+      if (!rootBase) {
         return;
       }
 
       nextUnitOfWork = wipRoot = {
-        alternate: currentRoot,
-        dom: currentRoot.dom,
-        props: currentRoot.props,
+        alternate: rootBase,
+        dom: rootBase.dom,
+        props: rootBase.props,
+        type: CONST_TYPE_FRAGMENT,
       } as I_FIBER;
       deletions = [];
-    },
+
+      polyfillRequestIdleCallback(workLoop);
+    }) as T_UPDATER_STATE<S>,
   ];
 }
 
 function _areDependenciesChanged(prev?: any[], next?: any[]) {
-  const szPrev = prev?.length ?? 0;
+  if (!prev) {
+    return true;
+  }
+
+  const szPrev = prev.length ?? 0;
 
   if (szPrev !== next?.length) {
     return true;
   }
 
   for (let i = 0; i < szPrev; ++i) {
-    if (!Object.is(prev![i], next[i])) {
+    if (!Object.is(prev[i], next![i])) {
       return true;
     }
   }
@@ -633,15 +704,15 @@ function _areDependenciesChanged(prev?: any[], next?: any[]) {
 
 function pushToPendings(
   tag: 'layout' | 'effect',
-  create: () => void,
-  deps: any[]
+  create: () => void | (() => void),
+  deps?: any[]
 ) {
   const isLayoutEffect = tag === 'layout';
   const oldHook =
     (wipFiber?.alternate?.hooks &&
       (wipFiber.alternate.hooks[hookIndex] as I_HOOK_EFFECT | undefined)) ||
     undefined;
-  const hook = {
+  const hook: I_HOOK_EFFECT = {
     cleanup: oldHook?.cleanup,
     create,
     deps,
@@ -650,21 +721,19 @@ function pushToPendings(
   wipFiber!.hooks!.push(hook);
   ++hookIndex;
 
-  if (!_areDependenciesChanged(oldHook?.deps, deps)) {
-    return;
+  if (deps === undefined || _areDependenciesChanged(oldHook?.deps, deps)) {
+    (isLayoutEffect ? pendingsLayoutEffects : pendingsPassiveEffects).push({
+      fiber: wipFiber!,
+      hook,
+    });
   }
-
-  (isLayoutEffect ? pendingsLayoutEffects : pendingsPassiveEffects).push({
-    fiber: wipFiber!,
-    hook,
-  });
 }
 
-function useEffect(create: () => void, deps: any[]) {
+function useEffect(create: () => void | (() => void), deps?: any[]) {
   pushToPendings('effect', create, deps);
 }
 
-function useLayoutEffect(create: () => void, deps: any[]) {
+function useLayoutEffect(create: () => void | (() => void), deps?: any[]) {
   pushToPendings('layout', create, deps);
 }
 
@@ -672,7 +741,11 @@ export {
   CONST_TYPE_FRAGMENT,
   CONST_TYPE_TEXT,
   createElement,
+  type I_FIBER,
+  type I_PROPS,
+  type I_VNODE,
   render,
+  type T_CREATE_ELEMENT,
   useEffect,
   useLayoutEffect,
   useState,
