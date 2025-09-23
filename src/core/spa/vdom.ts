@@ -74,7 +74,16 @@ interface I_HOOK_EFFECT {
   deps?: any[] | undefined;
 }
 
-type T_HOOK = I_HOOK_STATE | I_HOOK_EFFECT;
+interface I_HOOK_REF<T = any> {
+  current: T | undefined;
+}
+
+interface I_HOOK_MEMO<T = any> {
+  value: T;
+  deps?: any[] | undefined;
+}
+
+type T_HOOK = I_HOOK_STATE | I_HOOK_EFFECT | I_HOOK_REF | I_HOOK_MEMO;
 
 interface I_FIBER {
   type: T_VNODE_TYPE;
@@ -128,6 +137,22 @@ function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
 
   dom = dom as I_HTML_WITH_LISTENERS;
 
+  if (name === 'style') {
+    if (value == null || value === false) {
+      (dom as HTMLElement).removeAttribute('style');
+
+      return;
+    }
+
+    if (typeof value === 'string') {
+      (dom as HTMLElement).style.cssText = value;
+
+      return;
+    }
+
+    return;
+  }
+
   if (name === 'className') {
     if (value == null || value === false) {
       dom.removeAttribute('class');
@@ -157,13 +182,6 @@ function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
     return;
   }
 
-  if (name === 'style' && typeof value === 'object') {
-    dom.removeAttribute('style');
-    Object.assign((dom as HTMLElement).style, value || {});
-
-    return;
-  }
-
   if (name === 'ref') {
     if (typeof value === 'function') {
       value(dom || null);
@@ -183,6 +201,31 @@ function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
   dom.setAttribute(name, value === true ? '' : String(value));
 }
 
+function updateStyleShallowly(
+  el: HTMLElement,
+  prev?: Record<string, any>,
+  next?: Record<string, any>
+) {
+  const p = prev || {};
+  const n = next || {};
+
+  for (const k in p) {
+    if (k in n) {
+      continue;
+    }
+
+    (el.style as any)[k] = '';
+  }
+
+  for (const k in n) {
+    if (Object.is(p[k], n[k])) {
+      continue;
+    }
+
+    (el.style as any)[k] = n[k];
+  }
+}
+
 function updateDom(
   dom: Text | I_HTML_WITH_LISTENERS,
   propsPrev: I_PROPS | undefined,
@@ -199,7 +242,25 @@ function updateDom(
     return;
   }
 
-  const listBypass = new Set(['children', 'nodeValue', 'key']);
+  if (propsPrev?.style !== undefined || propsNext?.style !== undefined) {
+    const el = dom as unknown as HTMLElement;
+    const valuePrev = propsPrev?.style as any;
+    const valueNext = propsNext?.style as any;
+
+    if (typeof valueNext === 'string') {
+      el.style.cssText = valueNext || '';
+    } else if (valueNext && typeof valueNext === 'object') {
+      updateStyleShallowly(
+        el,
+        typeof valuePrev === 'object' ? valuePrev : undefined,
+        valueNext
+      );
+    } else {
+      el.removeAttribute?.('style');
+    }
+  }
+
+  const listBypass = new Set(['children', 'nodeValue', 'key', 'style']);
   const keys = new Set<string>([
     ...Object.keys(propsPrev || {}),
     ...Object.keys(propsNext || {}),
@@ -210,9 +271,10 @@ function updateDom(
       continue;
     }
 
+    const valuePrev = propsPrev ? (propsPrev as any)[k] : undefined;
     const valueNext = propsNext ? (propsNext as any)[k] : undefined;
 
-    if ((propsPrev ? (propsPrev as any)[k] : undefined) === valueNext) {
+    if (Object.is(valuePrev, valueNext)) {
       continue;
     }
 
@@ -694,17 +756,17 @@ function useState<S>(initial: S): [S, T_UPDATER_STATE<S>] {
 }
 
 function _areDependenciesChanged(prev?: any[], next?: any[]) {
-  if (!prev) {
+  if (!prev || !next) {
     return true;
   }
 
-  const szPrev = prev.length ?? 0;
+  const sz = prev.length ?? 0;
 
-  if (szPrev !== next?.length) {
+  if (sz !== next.length) {
     return true;
   }
 
-  for (let i = 0; i < szPrev; ++i) {
+  for (let i = 0; i < sz; ++i) {
     if (!Object.is(prev[i], next![i])) {
       return true;
     }
@@ -748,6 +810,45 @@ function useLayoutEffect(create: () => void | (() => void), deps?: any[]) {
   pushToPendings('layout', create, deps);
 }
 
+function useRef<T>(initial?: T) {
+  const hook = ((wipFiber?.alternate?.hooks &&
+    (wipFiber.alternate.hooks[hookIndex] as I_HOOK_REF<T> | undefined)) ||
+    undefined) ?? { current: initial as T | undefined };
+  wipFiber!.hooks!.push(hook as T_HOOK);
+
+  ++hookIndex;
+
+  return hook;
+}
+
+function useMemo<T>(factory: () => T, deps?: any[]): T {
+  const oldHook =
+    (wipFiber?.alternate?.hooks &&
+      (wipFiber.alternate.hooks[hookIndex] as I_HOOK_MEMO<T> | undefined)) ||
+    undefined;
+  const hook: I_HOOK_MEMO<T> = {
+    deps: oldHook?.deps,
+    value: oldHook?.value as T,
+  };
+
+  if (!deps) {
+    hook.deps = undefined;
+    hook.value = factory();
+  } else if (_areDependenciesChanged(oldHook?.deps, deps)) {
+    hook.value = factory();
+    hook.deps = deps;
+  }
+
+  wipFiber!.hooks!.push(hook as T_HOOK);
+  ++hookIndex;
+
+  return hook.value;
+}
+
+function useCallback<T extends (..._args: any[]) => any>(cb: T, deps?: any[]) {
+  return useMemo(() => cb, deps);
+}
+
 export {
   CONST_TYPE_FRAGMENT,
   CONST_TYPE_TEXT,
@@ -757,7 +858,10 @@ export {
   type I_VNODE,
   render,
   type T_CREATE_ELEMENT,
+  useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
+  useRef,
   useState,
 };
