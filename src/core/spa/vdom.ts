@@ -16,6 +16,7 @@ type T_ANY_PROPS = Record<string, any>;
 interface I_VNODE {
   type: T_VNODE_TYPE;
   props?: I_PROPS;
+  key?: string | number | null;
 }
 
 interface I_PROPS extends T_ANY_PROPS {
@@ -86,6 +87,7 @@ interface I_FIBER {
   effectTag?: T_EFFECT_TAG;
   stateNode?: I_CLASS_COMPONENT_INSTANCE<any>;
   hooks?: T_HOOK[];
+  key?: string | number | null;
 }
 
 interface I_CONTAINER_WITH_VNODE extends HTMLElement {
@@ -231,9 +233,12 @@ function createElement(
     | I_VNODE[]
   )[]
 ) {
+  const { key = null, ..._props } = props || {};
+
   return {
+    key,
     props: {
-      ...(props || {}),
+      ...(_props || {}),
       children: children
         .flat()
         .filter(
@@ -496,14 +501,19 @@ function reconcileChildren(wip: I_FIBER, elements?: I_VNODE[]) {
 
   while (index < (elements ? elements.length : 0) || oldFiber != null) {
     const element = elements && elements[index];
-    const sameType = oldFiber && element && element.type === oldFiber.type;
+    const sameTypeAndKey =
+      oldFiber &&
+      element &&
+      element.type === oldFiber.type &&
+      (oldFiber.key ?? null) === (element.key ?? null);
     let newFiber: I_FIBER | null = null;
 
-    if (sameType && oldFiber && element) {
+    if (sameTypeAndKey && oldFiber && element) {
       newFiber = {
         alternate: oldFiber,
         dom: oldFiber.dom,
         effectTag: 'UPDATE',
+        key: oldFiber.key ?? null,
         parent: wip,
         props: element.props,
         stateNode: oldFiber.stateNode,
@@ -511,18 +521,19 @@ function reconcileChildren(wip: I_FIBER, elements?: I_VNODE[]) {
       } as I_FIBER;
     }
 
-    if (element && !sameType) {
+    if (element && !sameTypeAndKey) {
       newFiber = {
         alternate: null,
         dom: null,
         effectTag: 'PLACEMENT',
+        key: element.key ?? null,
         parent: wip,
         props: element.props,
         type: element.type,
       } as I_FIBER;
     }
 
-    if (oldFiber && !sameType) {
+    if (oldFiber && !sameTypeAndKey) {
       oldFiber.effectTag = 'DELETION';
       deletions.push(oldFiber);
     }
