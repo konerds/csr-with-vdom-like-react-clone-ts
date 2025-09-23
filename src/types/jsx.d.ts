@@ -7,6 +7,10 @@ declare global {
     interface IntrinsicElements {
       [tag: string]: any;
     }
+
+    interface IntrinsicAttributes {
+      [attr: string]: any;
+    }
   }
 }
 

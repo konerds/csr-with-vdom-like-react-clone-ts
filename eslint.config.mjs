@@ -10,7 +10,7 @@ const CONFIGS_COMMON = {
   files: ['**/*.{ts,tsx,js,mjs}'],
   languageOptions: {
     ecmaVersion: 'latest',
-    globals: { ...globals.node, ...globals.es2021, ...globals.browser },
+    globals: { ...globals.node, ...globals.es2022, ...globals.browser },
     sourceType: 'module',
   },
 };
