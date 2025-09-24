@@ -16,6 +16,7 @@ class Router<H> {
   #listenerDocumentClick: (_e: MouseEvent) => void;
   #isResolving = false;
   #isResolvingScheduled = false;
+  #rerunAfterResolve = false;
   #isDestroyed = false;
 
   constructor({
@@ -109,8 +110,16 @@ class Router<H> {
     }
   }
 
+  #lastResolvedKey: string | null = null;
+
   resolve() {
-    if (this.#isDestroyed || this.#isResolving) {
+    if (this.#isDestroyed) {
+      return;
+    }
+
+    if (this.#isResolving) {
+      this.#rerunAfterResolve = true;
+
       return;
     }
 
@@ -119,6 +128,13 @@ class Router<H> {
     try {
       const url = this.#currentURL();
       const pathname = (url.pathname || '/').replace(/\/+$/, '') || '/';
+      const keyCurrent = `${pathname}?${url.search || ''}`;
+
+      if (this.#lastResolvedKey === keyCurrent) {
+        return;
+      }
+
+      this.#lastResolvedKey = keyCurrent;
       const matched = this.#match(pathname);
 
       if (!matched) {
@@ -130,12 +146,12 @@ class Router<H> {
     } finally {
       this.#isResolving = false;
 
-      if (!this.#isResolvingScheduled) {
+      if (!this.#rerunAfterResolve || this.#isDestroyed) {
         return;
       }
 
-      this.#isResolvingScheduled = false;
-      queueMicrotask(() => this.resolve());
+      this.#rerunAfterResolve = false;
+      this.#scheduleResolve();
     }
   }
 
@@ -203,12 +219,21 @@ class Router<H> {
     }
 
     if (this.#isResolving) {
-      this.#isResolvingScheduled = true;
+      this.#rerunAfterResolve = true;
 
       return;
     }
 
-    queueMicrotask(() => this.resolve());
+    if (this.#isResolvingScheduled) {
+      return;
+    }
+
+    this.#isResolvingScheduled = true;
+
+    queueMicrotask(() => {
+      this.#isResolvingScheduled = false;
+      this.resolve();
+    });
   }
 
   destroy() {
