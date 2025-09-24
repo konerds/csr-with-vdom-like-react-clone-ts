@@ -112,6 +112,8 @@ interface I_PENDINGS {
   hook: I_HOOK_EFFECT;
 }
 
+type T_CANCEL_IDLE_CALLBACK = (_id: number) => void;
+
 const polyfillRequestIdleCallback: T_REQUEST_IDLE_CALLBACK =
   typeof requestIdleCallback === 'function'
     ? (cb) => requestIdleCallback(cb)
@@ -120,6 +122,31 @@ const polyfillRequestIdleCallback: T_REQUEST_IDLE_CALLBACK =
           () => cb({ didTimeout: true, timeRemaining: () => 0 }),
           1
         ) as unknown as number;
+
+const polyfillCancelIdleCallback: T_CANCEL_IDLE_CALLBACK =
+  typeof cancelIdleCallback === 'function'
+    ? (id) => cancelIdleCallback(id)
+    : (id) => clearTimeout(id as any);
+
+let _scheduledIdleCbId: number | null = null;
+
+function _cancelScheduledWorkLoop() {
+  if (_scheduledIdleCbId != null) {
+    polyfillCancelIdleCallback(_scheduledIdleCbId);
+    _scheduledIdleCbId = null;
+  }
+}
+
+function _ensureWorkLoopScheduled() {
+  if (_scheduledIdleCbId != null || (!nextUnitOfWork && !wipRoot)) {
+    return;
+  }
+
+  _scheduledIdleCbId = polyfillRequestIdleCallback((deadline) => {
+    _scheduledIdleCbId = null;
+    workLoop(deadline);
+  });
+}
 
 function isTypeClassComponent(
   t: unknown
@@ -334,10 +361,14 @@ function workLoop(deadline: I_IDLE_DEADLINE) {
     commitRoot();
   }
 
-  polyfillRequestIdleCallback(workLoop);
-}
+  if (nextUnitOfWork || wipRoot) {
+    _ensureWorkLoopScheduled();
 
-polyfillRequestIdleCallback(workLoop);
+    return;
+  }
+
+  _cancelScheduledWorkLoop();
+}
 
 function createDomFromFiber(fiber: I_FIBER) {
   if (fiber.type === CONST_TYPE_TEXT) {
@@ -364,6 +395,10 @@ function flushLayoutEffects() {
   const runs = pendingsLayoutEffects;
   pendingsLayoutEffects = [];
 
+  if (runs.length === 0) {
+    return;
+  }
+
   for (const { hook } of runs) {
     if (typeof hook.cleanup === 'function') {
       try {
@@ -378,48 +413,145 @@ function flushLayoutEffects() {
     const r = typeof hook.create === 'function' ? hook.create() : undefined;
     hook.cleanup = typeof r === 'function' ? r : undefined;
   }
+
+  runs.length = 0;
 }
 
 let pendingsPassiveEffects: I_PENDINGS[] = [];
+let _passiveFlushScheduled = false;
 
 function schedulePassiveEffectsFlush() {
   const runs = pendingsPassiveEffects;
   pendingsPassiveEffects = [];
 
+  if (runs.length === 0) {
+    return;
+  }
+
+  if (_passiveFlushScheduled) {
+    pendingsLayoutEffects.push(...runs);
+
+    return;
+  }
+
+  _passiveFlushScheduled = true;
+
   setTimeout(() => {
-    for (const { hook } of runs) {
-      if (typeof hook.cleanup === 'function') {
-        try {
-          hook.cleanup();
-        } catch {
-          // ignore
+    try {
+      for (const { hook } of runs) {
+        if (typeof hook.cleanup === 'function') {
+          try {
+            hook.cleanup();
+          } catch {
+            // ignore
+          }
+
+          hook.cleanup = undefined;
         }
 
-        hook.cleanup = undefined;
+        const r = typeof hook.create === 'function' ? hook.create() : undefined;
+        hook.cleanup = typeof r === 'function' ? r : undefined;
       }
 
-      const r = typeof hook.create === 'function' ? hook.create() : undefined;
-      hook.cleanup = typeof r === 'function' ? r : undefined;
+      runs.length = 0;
+    } finally {
+      _passiveFlushScheduled = false;
     }
   }, 0);
+}
+
+function _deepDetachFiber(node: I_FIBER | null) {
+  const stack: I_FIBER[] = [];
+
+  if (node) {
+    stack.push(node);
+  }
+
+  while (stack.length) {
+    const f = stack.pop()!;
+
+    if (f.child) {
+      stack.push(f.child);
+    }
+
+    if (f.sibling) {
+      stack.push(f.sibling);
+    }
+
+    (f as any).parent =
+      (f as any).child =
+      (f as any).sibling =
+      (f as any).alternate =
+      (f as any).dom =
+        null;
+
+    if ((f as any).props) {
+      (f as any).props = null;
+    }
+
+    if ((f as any).eventListenerMap) {
+      (f as any).eventListenerMap = null;
+    }
+
+    if ((f as any).state) {
+      (f as any).state = null;
+    }
+
+    if ((f as any).hooks) {
+      (f as any).hooks.length = 0;
+    }
+
+    if ((f as any).effects) {
+      (f as any).effects.length = 0;
+    }
+  }
 }
 
 let deletions: I_FIBER[] = [];
 let currentRoot: I_FIBER | null = null;
 
+function _pruneAlternatePointers(root: I_FIBER | null) {
+  const stack: I_FIBER[] = [];
+
+  if (root) {
+    stack.push(root);
+  }
+
+  while (stack.length) {
+    const f = stack.pop()!;
+
+    if (f.child) {
+      stack.push(f.child);
+    }
+
+    if (f.sibling) {
+      stack.push(f.sibling);
+    }
+
+    (f as any).alternate = null;
+  }
+}
+
 function commitRoot() {
   for (const deletion of deletions) {
     commitWork(deletion);
+    _deepDetachFiber(deletion);
   }
+
+  deletions = [];
 
   if (wipRoot) {
     commitWork(wipRoot.child);
   }
 
-  currentRoot = wipRoot;
+  _pruneAlternatePointers((currentRoot = wipRoot));
   flushLayoutEffects();
   schedulePassiveEffectsFlush();
   wipRoot = null;
+
+  if (!nextUnitOfWork && !wipRoot) {
+    _cancelScheduledWorkLoop();
+  }
 }
 
 function commitWork(fiber?: I_FIBER | null) {
@@ -494,6 +626,44 @@ function cleanupEffectsOnFiber(fiber?: I_FIBER | null) {
   }
 }
 
+function _removeAllDomListenersAndRef(
+  dom: I_HTML_WITH_LISTENERS | Text | null | undefined,
+  props?: I_PROPS
+) {
+  if (dom && (dom as Node).nodeType !== Node.TEXT_NODE) {
+    const el = dom as I_HTML_WITH_LISTENERS;
+    const map = el.__listeners;
+
+    if (map) {
+      for (const type in map) {
+        try {
+          el.removeEventListener(type, map[type]);
+        } catch {
+          // ignore
+        }
+      }
+
+      el.__listeners = undefined;
+    }
+  }
+
+  const ref = props?.ref as any;
+
+  if (ref && typeof ref === 'object') {
+    ref.current = null;
+
+    return;
+  }
+
+  if (typeof ref === 'function') {
+    try {
+      ref(null);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 function commitDeletion(
   fiber: I_FIBER | null,
   domParent: Node | null | undefined
@@ -505,6 +675,8 @@ function commitDeletion(
   cleanupEffectsOnFiber(fiber);
 
   if (fiber.dom) {
+    _removeAllDomListenersAndRef(fiber.dom as any, fiber.props);
+
     if (fiber.dom.parentNode) {
       fiber.dom.parentNode.removeChild(fiber.dom);
     }
@@ -528,6 +700,8 @@ function render(vnode: I_VNODE, container: I_CONTAINER_WITH_VNODE) {
   } as I_FIBER;
   container.__vnode = vnode;
   deletions = [];
+
+  _ensureWorkLoopScheduled();
 }
 
 function performUnitOfWork(fiber: I_FIBER) {
@@ -642,6 +816,8 @@ function updateCompositeComponent(fiber: I_FIBER) {
           type: CONST_TYPE_FRAGMENT,
         } as I_FIBER;
         deletions = [];
+
+        _ensureWorkLoopScheduled();
       };
 
       reconcileChildren(fiber, [
@@ -749,8 +925,7 @@ function useState<S>(initial: S): [S, T_UPDATER_STATE<S>] {
         type: CONST_TYPE_FRAGMENT,
       } as I_FIBER;
       deletions = [];
-
-      polyfillRequestIdleCallback(workLoop);
+      _ensureWorkLoopScheduled();
     }) as T_UPDATER_STATE<S>,
   ];
 }
