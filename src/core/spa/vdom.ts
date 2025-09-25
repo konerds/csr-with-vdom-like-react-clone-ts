@@ -164,6 +164,14 @@ function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
 
   dom = dom as I_HTML_WITH_LISTENERS;
 
+  if (name === 'className') {
+    name = 'class';
+  }
+
+  if (name === 'htmlFor') {
+    name = 'for';
+  }
+
   if (name === 'style') {
     if (value == null || value === false) {
       (dom as HTMLElement).removeAttribute('style');
@@ -180,14 +188,14 @@ function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
     return;
   }
 
-  if (name === 'className') {
+  if (name === 'class') {
     if (value == null || value === false) {
-      dom.removeAttribute('class');
+      (dom as HTMLElement).removeAttribute('class');
 
       return;
     }
 
-    dom.setAttribute('class', value);
+    (dom as HTMLElement).setAttribute('class', String(value));
 
     return;
   }
@@ -212,8 +220,14 @@ function setProp(dom: I_HTML_WITH_LISTENERS | Text, name: string, value: any) {
   if (name === 'ref') {
     if (typeof value === 'function') {
       value(dom || null);
-    } else if (value && typeof value === 'object') {
+
+      return;
+    }
+
+    if (value && typeof value === 'object') {
       (value as any).current = dom || null;
+
+      return;
     }
 
     return;
@@ -329,7 +343,7 @@ function createElement(
     props: {
       ...(_props || {}),
       children: children
-        .flat()
+        .flat(Infinity)
         .filter(
           (c) => c !== null && c !== undefined && c !== false && c !== true
         )
@@ -460,53 +474,6 @@ function schedulePassiveEffectsFlush() {
   }, 0);
 }
 
-function _deepDetachFiber(node: I_FIBER | null) {
-  const stack: I_FIBER[] = [];
-
-  if (node) {
-    stack.push(node);
-  }
-
-  while (stack.length) {
-    const f = stack.pop()!;
-
-    if (f.child) {
-      stack.push(f.child);
-    }
-
-    if (f.sibling) {
-      stack.push(f.sibling);
-    }
-
-    (f as any).parent =
-      (f as any).child =
-      (f as any).sibling =
-      (f as any).alternate =
-      (f as any).dom =
-        null;
-
-    if ((f as any).props) {
-      (f as any).props = null;
-    }
-
-    if ((f as any).eventListenerMap) {
-      (f as any).eventListenerMap = null;
-    }
-
-    if ((f as any).state) {
-      (f as any).state = null;
-    }
-
-    if ((f as any).hooks) {
-      (f as any).hooks.length = 0;
-    }
-
-    if ((f as any).effects) {
-      (f as any).effects.length = 0;
-    }
-  }
-}
-
 let deletions: I_FIBER[] = [];
 let currentRoot: I_FIBER | null = null;
 
@@ -535,7 +502,6 @@ function _pruneAlternatePointers(root: I_FIBER | null) {
 function commitRoot() {
   for (const deletion of deletions) {
     commitWork(deletion);
-    _deepDetachFiber(deletion);
   }
 
   deletions = [];
@@ -552,6 +518,54 @@ function commitRoot() {
   if (!nextUnitOfWork && !wipRoot) {
     _cancelScheduledWorkLoop();
   }
+}
+
+function _getHostSibling(fiber: I_FIBER): Node | null {
+  let node: I_FIBER | null = fiber;
+
+  findSibling: while (node) {
+    while (node && !node.sibling) {
+      node = node.parent ?? null;
+
+      if (!node || node.dom) {
+        return null;
+      }
+    }
+
+    if (!node) {
+      return null;
+    }
+
+    node = node.sibling!;
+
+    while (node && !node.dom) {
+      if (node.effectTag === 'PLACEMENT') {
+        continue findSibling;
+      }
+
+      if (!node.child) {
+        continue findSibling;
+      }
+
+      node = node.child;
+    }
+
+    if (node && node.dom && node.effectTag !== 'PLACEMENT') {
+      return node.dom as Node;
+    }
+  }
+
+  return null;
+}
+
+function _insertBeforeOrAppend(parent: Node, node: Node, before: Node | null) {
+  if (before) {
+    (parent as ParentNode).insertBefore(node, before);
+
+    return;
+  }
+
+  (parent as ParentNode).appendChild(node);
 }
 
 function commitWork(fiber?: I_FIBER | null) {
@@ -574,19 +588,25 @@ function commitWork(fiber?: I_FIBER | null) {
   }
 
   if (fiber.effectTag === 'PLACEMENT') {
-    if (fiber.dom && domParent) {
-      (domParent as Node & ParentNode).appendChild(fiber.dom);
-    } else if (
-      fiber.stateNode &&
-      typeof fiber.stateNode.componentDidMount === 'function'
-    ) {
-      queueMicrotask(() => {
-        try {
-          fiber.stateNode!.componentDidMount!();
-        } catch {
-          // ignore
-        }
-      });
+    if (domParent) {
+      const anchor = _getHostSibling(fiber);
+
+      if (fiber.dom) {
+        _insertBeforeOrAppend(domParent as Node, fiber.dom as Node, anchor);
+      }
+
+      if (
+        fiber.stateNode &&
+        typeof fiber.stateNode.componentDidMount === 'function'
+      ) {
+        queueMicrotask(() => {
+          try {
+            fiber.stateNode!.componentDidMount!();
+          } catch {
+            // ignore
+          }
+        });
+      }
     }
   } else if (fiber.effectTag === 'UPDATE' && fiber.dom) {
     updateDom(
@@ -622,6 +642,16 @@ function cleanupEffectsOnFiber(fiber?: I_FIBER | null) {
       }
 
       h.cleanup = undefined;
+    }
+  }
+
+  const ref = fiber.props?.ref as any;
+
+  if (typeof ref === 'function') {
+    try {
+      ref(null);
+    } catch {
+      // ignore
     }
   }
 }
@@ -672,23 +702,46 @@ function commitDeletion(
     return;
   }
 
-  cleanupEffectsOnFiber(fiber);
+  const removeDescendants = (node: I_FIBER | null | undefined) => {
+    if (!node) {
+      return;
+    }
+
+    removeDescendants(node.child);
+    removeDescendants(node.sibling);
+    cleanupEffectsOnFiber(node);
+
+    if (node.dom) {
+      _removeAllDomListenersAndRef(node.dom as any, node.props);
+      const parent = (node.dom as any).parentNode;
+
+      if (parent) {
+        parent.removeChild(node.dom as any);
+
+        return;
+      }
+
+      if (domParent && (domParent as Node).contains(node.dom as any)) {
+        try {
+          (domParent as Node).removeChild(node.dom as any);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  };
 
   if (fiber.dom) {
     _removeAllDomListenersAndRef(fiber.dom as any, fiber.props);
+    const parent = (fiber.dom as any).parentNode;
 
-    if (fiber.dom.parentNode) {
-      fiber.dom.parentNode.removeChild(fiber.dom);
+    if (parent) {
+      parent.removeChild(fiber.dom as any);
     }
-
-    return;
   }
 
-  commitDeletion(fiber.child ?? null, domParent);
-
-  if (fiber.sibling) {
-    commitDeletion(fiber.sibling, domParent);
-  }
+  removeDescendants(fiber.child);
+  cleanupEffectsOnFiber(fiber);
 }
 
 function render(vnode: I_VNODE, container: I_CONTAINER_WITH_VNODE) {
@@ -728,36 +781,59 @@ function performUnitOfWork(fiber: I_FIBER) {
   return null;
 }
 
+function _unwrapFragments(elements?: I_VNODE[] | null): I_VNODE[] {
+  const out: I_VNODE[] = [];
+  const list = Array.isArray(elements) ? elements! : [];
+
+  for (const el of list) {
+    if (!el) {
+      continue;
+    }
+
+    if (el.type === CONST_TYPE_FRAGMENT) {
+      out.push(..._unwrapFragments((el.props?.children as I_VNODE[]) || []));
+
+      continue;
+    }
+
+    out.push(el);
+  }
+
+  return out;
+}
+
 let wipFiber: I_FIBER | null = null;
 
 function reconcileChildren(wip: I_FIBER, elements?: I_VNODE[]) {
   let index = 0;
   let oldFiber = wip.alternate && wip.alternate.child;
   let prevSibling: I_FIBER | null = null;
+  const nextChildren = _unwrapFragments(elements || []);
+  const szNextChildren = nextChildren.length;
 
-  while (index < (elements ? elements.length : 0) || oldFiber != null) {
-    const element = elements && elements[index];
+  while (index < szNextChildren || oldFiber != null) {
+    const element = nextChildren[index];
     const sameTypeAndKey =
       oldFiber &&
       element &&
       element.type === oldFiber.type &&
       (oldFiber.key ?? null) === (element.key ?? null);
+
     let newFiber: I_FIBER | null = null;
 
     if (sameTypeAndKey && oldFiber && element) {
       newFiber = {
         alternate: oldFiber,
-        dom: oldFiber.dom,
+        dom: oldFiber.dom ?? null,
         effectTag: 'UPDATE',
-        key: oldFiber.key ?? null,
+        hooks: oldFiber.hooks ? [] : undefined,
+        key: element.key ?? null,
         parent: wip,
         props: element.props,
         stateNode: oldFiber.stateNode,
         type: oldFiber.type,
       } as I_FIBER;
-    }
-
-    if (element && !sameTypeAndKey) {
+    } else if (element) {
       newFiber = {
         alternate: null,
         dom: null,
@@ -856,12 +932,15 @@ function updateCompositeComponent(fiber: I_FIBER) {
   hookIndex = 0;
   wipFiber = fiber;
   wipFiber.hooks = [];
-  reconcileChildren(fiber, [
-    (t as T_FUNCTION_COMPONENT<any>)({
-      ...(fiber.props || {}),
-      children: fiber.props?.children || [],
-    }),
-  ]);
+  reconcileChildren(
+    fiber,
+    _unwrapFragments([
+      (t as T_FUNCTION_COMPONENT<any>)({
+        ...(fiber.props || {}),
+        children: fiber.props?.children || [],
+      }),
+    ])
+  );
 }
 
 function updateHostComponent(fiber: I_FIBER) {
@@ -871,9 +950,11 @@ function updateHostComponent(fiber: I_FIBER) {
 
   reconcileChildren(
     fiber,
-    fiber.props && Array.isArray(fiber.props.children)
-      ? (fiber.props.children as I_VNODE[])
-      : []
+    _unwrapFragments(
+      fiber.props && Array.isArray(fiber.props.children)
+        ? (fiber.props.children as I_VNODE[])
+        : []
+    )
   );
 }
 
