@@ -1,7 +1,7 @@
-import { useRouter } from '@/router/router';
 import { fetchTodo, type I_TODO } from '@api';
 import { Todo } from '@components';
 import { createElement as el, useLayoutEffect, useState } from '@core';
+import { useRouter } from '@router';
 
 function PageTodo() {
   const { params } = useRouter();
@@ -35,9 +35,9 @@ function PageTodo() {
       .then((todo) => {
         setTodo(todo);
       })
-      .catch((err) => {
+      .catch((e) => {
         // eslint-disable-next-line no-console
-        console.error(err);
+        console.error(e);
         setIsError(true);
       })
       .finally(() => {

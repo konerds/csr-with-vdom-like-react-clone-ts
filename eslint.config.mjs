@@ -29,6 +29,9 @@ export default [
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
     settings: {
       'import/resolver': {
         node: { extensions: ['.ts', '.tsx', '.js', '.json'] },
@@ -47,7 +50,6 @@ export default [
       'simple-import-sort': pluginSimpleImportSort,
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
       'import/exports-last': 'error',
       'import/newline-after-import': ['error', { count: 1 }],
       'no-console': 'error',
@@ -77,6 +79,26 @@ export default [
         { blankLine: 'always', next: ['function', 'class'], prev: '*' },
         { blankLine: 'always', next: '*', prev: ['function', 'class'] },
         { blankLine: 'always', next: 'return', prev: '*' },
+      ],
+      'perfectionist/sort-classes': [
+        'error',
+        {
+          groups: [
+            'index-signature',
+            'static-property',
+            ['protected-property', 'protected-accessor-property'],
+            ['private-property', 'private-accessor-property'],
+            ['property', 'accessor-property'],
+            'constructor',
+            'static-method',
+            'protected-method',
+            'private-method',
+            'method',
+            ['get-method', 'set-method'],
+            'unknown',
+          ],
+          type: 'alphabetical',
+        },
       ],
       'perfectionist/sort-named-imports': [
         'error',
