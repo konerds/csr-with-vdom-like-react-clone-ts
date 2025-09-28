@@ -69,17 +69,7 @@ class ProviderRouter extends Component<T_PROPS, T_STATE> {
       routes: ROUTES,
     });
 
-    this.router.resolve();
-  }
-
-  unmount() {
-    if (typeof this.router?.destroy === 'function') {
-      this.router.destroy();
-    }
-
-    this.router = null;
-
-    super.unmount();
+    this.router.requestResolve();
   }
 
   render() {
@@ -121,6 +111,16 @@ class ProviderRouter extends Component<T_PROPS, T_STATE> {
     return el(elPage, {
       ...propsDefault,
     });
+  }
+
+  unmount() {
+    if (typeof this.router?.destroy === 'function') {
+      this.router.destroy();
+    }
+
+    this.router = null;
+
+    super.unmount();
   }
 }
 

@@ -1,4 +1,7 @@
-import { CONST_MODES_ROUTER } from './constants';
+import { CONST_MODES_ROUTER, CONST_MODES_SCHEDULING } from './constants';
+
+type T_MODES_SCHEDULING =
+  (typeof CONST_MODES_SCHEDULING)[keyof typeof CONST_MODES_SCHEDULING];
 
 type T_MODES_ROUTER =
   (typeof CONST_MODES_ROUTER)[keyof typeof CONST_MODES_ROUTER];
@@ -29,6 +32,7 @@ export type {
   I_ROUTER,
   I_ROUTES,
   T_MODES_ROUTER,
+  T_MODES_SCHEDULING,
   T_ON_ROUTE,
   T_PARAMS_ON_ROUTE,
 };
