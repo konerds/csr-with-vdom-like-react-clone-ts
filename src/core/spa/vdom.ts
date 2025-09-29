@@ -323,6 +323,43 @@ function updateDom(
   }
 }
 
+function _normalizeChildren(input: any[]): I_VNODE[] {
+  const flat: any[] = [];
+
+  const flatten = (arr: any[]) => {
+    for (const c of arr) {
+      if (Array.isArray(c)) {
+        flatten(c);
+
+        continue;
+      }
+
+      flat.push(c);
+    }
+  };
+
+  flatten(input);
+
+  const out: I_VNODE[] = [];
+
+  for (const c of flat) {
+    if (c === null || c === undefined || c === false || c === true) {
+      continue;
+    }
+
+    out.push(
+      typeof c === 'string' || typeof c === 'number'
+        ? ({
+            props: { nodeValue: String(c) } as I_PROPS,
+            type: CONST_TYPE_TEXT,
+          } as I_VNODE)
+        : (c as I_VNODE)
+    );
+  }
+
+  return out;
+}
+
 function createElement(
   type: T_VNODE_TYPE,
   props: I_PROPS = {},
@@ -342,19 +379,7 @@ function createElement(
     key,
     props: {
       ...(_props || {}),
-      children: children
-        .flat(Infinity)
-        .filter(
-          (c) => c !== null && c !== undefined && c !== false && c !== true
-        )
-        .map((c) =>
-          typeof c === 'string' || typeof c === 'number'
-            ? ({
-                props: { nodeValue: String(c) } as I_PROPS,
-                type: CONST_TYPE_TEXT,
-              } as I_VNODE)
-            : (c as I_VNODE)
-        ),
+      children: _normalizeChildren(children as any[]),
     },
     type,
   } as I_VNODE;

@@ -16,19 +16,31 @@ abstract class Component<
   P extends object = Record<string, unknown>,
   S extends object = Record<string, unknown>,
 > {
+  __updater?: T_UPDATER;
+  containerRef: T_CONTAINER | null = null;
+  isMounted: boolean = false;
   readonly props: Readonly<P>;
   state!: S;
-  isMounted: boolean = false;
-  containerRef: T_CONTAINER | null = null;
-  __updater?: T_UPDATER;
+
+  constructor(props?: P) {
+    this.props = (props ?? ({} as P)) as Readonly<P>;
+  }
 
   componentDidMount?(): void;
 
   componentDidUpdate?(_prevProps: Readonly<P>, _prevState: Readonly<S>): void;
 
-  constructor(props?: P) {
-    this.props = (props ?? ({} as P)) as Readonly<P>;
+  mount(container: T_CONTAINER) {
+    this.containerRef = container;
+    this.isMounted = true;
+    this.updateInternal();
+
+    if (typeof this.componentDidMount === 'function') {
+      queueMicrotask(() => this.componentDidMount!());
+    }
   }
+
+  abstract render(_createElement: T_CREATE_ELEMENT): I_VNODE;
 
   setState(patch: T_PATCH<S>) {
     const prev = (this.state ?? ({} as S)) as Readonly<S>;
@@ -47,22 +59,10 @@ abstract class Component<
     this.updateInternal();
   }
 
-  mount(container: T_CONTAINER) {
-    this.containerRef = container;
-    this.isMounted = true;
-    this.updateInternal();
-
-    if (typeof this.componentDidMount === 'function') {
-      queueMicrotask(() => this.componentDidMount!());
-    }
-  }
-
   unmount() {
     this.isMounted = false;
     this.containerRef = null;
   }
-
-  abstract render(_createElement: T_CREATE_ELEMENT): I_VNODE;
 
   updateInternal() {
     if (typeof this.__updater === 'function') {
@@ -76,9 +76,12 @@ abstract class Component<
     }
 
     const vnode = this.render(createElement as T_CREATE_ELEMENT);
-    vnode.props = vnode.props || {};
-    vnode.props['data-component'] = this.constructor.name;
-    (render as T_RENDER)(vnode as I_VNODE, this.containerRef);
+    const nextProps = vnode.props ? { ...vnode.props } : {};
+    (nextProps as any)['data-component'] = this.constructor.name;
+    (render as T_RENDER)(
+      { ...(vnode as any), props: nextProps } as I_VNODE,
+      this.containerRef
+    );
   }
 }
 
